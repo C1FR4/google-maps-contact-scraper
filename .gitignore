@@ -1,0 +1,24 @@
+# Dependencias
+node_modules/
+
+# Archivos generados por el scraper
+contactos.xlsx
+contactos_temp.xlsx
+*.xlsx
+*.db
+
+# Variables de entorno
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

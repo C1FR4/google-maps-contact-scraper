@@ -1,0 +1,39 @@
+{
+  "archivoExcel": "contactos.xlsx",
+  "maxResultadosPorBusqueda": 50,
+  "visitarWebDelNegocio": true,
+  "esperaMsEntreBusquedas": 3000,
+  "umbralTextoUtil": 400,
+  "concurrencia": 5,
+  "concurrenciaFichas": 4,
+
+  "palabrasContacto": [
+    "contacto",
+    "contactenos",
+    "contact",
+    "contactus",
+    "ubicacion",
+    "ubicaciones",
+    "locales",
+    "tiendas",
+    "sucursales"
+  ],
+
+  "CATEGORIAS": [
+  "Cafetería",
+  "Restaurante peruano",
+  "Tienda de ropa"
+],
+  "DISTRITOS": [
+  "Miraflores Lima",
+  "Barranco Lima",
+  "San Isidro Lima",
+  "Lince Lima",
+  "Jesús María Lima",
+  "Magdalena del Mar Lima",
+  "Pueblo Libre Lima",
+  "San Miguel Lima",
+  "Surquillo Lima",
+  "Santiago de Surco Lima"
+]
+}
