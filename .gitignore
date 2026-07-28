@@ -5,7 +5,6 @@ node_modules/
 contactos.xlsx
 contactos_temp.xlsx
 *.xlsx
-*.db
 
 # Variables de entorno
 .env

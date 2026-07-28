@@ -3,84 +3,14 @@ const ExcelJS = require("exceljs");
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
-const pLimit = require("p-limit").default;
-const Database = require("better-sqlite3");
 
 // ─── CARGAR CONFIGURACIÓN DESDE config.json ───────────────────────
 const configPath = path.join(__dirname, "config.json");
 if (!fs.existsSync(configPath)) {
-  console.error(" No se encontró config.json. Crea el archivo antes de ejecutar.");
+  console.error("❌  No se encontró config.json. Crea el archivo antes de ejecutar.");
   process.exit(1);
 }
 const CONFIG = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-// ─────────────────────────────────────────────────────────────────
-
-// ─── SQLITE ────────────────────────────────────────────────────────
-const DB_PATH = path.join(__dirname, "contactos.db");
-const db = new Database(DB_PATH);
-db.pragma("journal_mode = WAL");
-db.exec(`
-  CREATE TABLE IF NOT EXISTS negocios (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nombre TEXT DEFAULT '',
-    categoria TEXT DEFAULT '',
-    valoracion TEXT DEFAULT '',
-    telefono_maps TEXT DEFAULT '',
-    telefono_web TEXT DEFAULT '',
-    correo TEXT DEFAULT '',
-    whatsapp TEXT DEFAULT '',
-    instagram TEXT DEFAULT '',
-    facebook TEXT DEFAULT '',
-    tiktok TEXT DEFAULT '',
-    direccion TEXT DEFAULT '',
-    web TEXT DEFAULT '',
-    url_maps TEXT DEFAULT '',
-    busqueda TEXT DEFAULT '',
-    metodo TEXT DEFAULT '',
-    via TEXT DEFAULT '',
-    estado TEXT DEFAULT '',
-    creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
-
-const insertNegocio = db.prepare(`
-  INSERT INTO negocios (
-    nombre, categoria, valoracion, telefono_maps, telefono_web,
-    correo, whatsapp, instagram, facebook, tiktok,
-    direccion, web, url_maps, busqueda, metodo, via, estado
-  ) VALUES (
-    @nombre, @categoria, @valoracion, @telefono_maps, @telefono_web,
-    @correo, @whatsapp, @instagram, @facebook, @tiktok,
-    @direccion, @web, @url_maps, @busqueda, @metodo, @via, @estado
-  )
-`);
-
-function guardarNegocio(datos) {
-  insertNegocio.run({
-    nombre: datos.Nombre || '',
-    categoria: datos.Categoría || '',
-    valoracion: datos.Valoración || '',
-    telefono_maps: datos['Teléfono Maps'] || '',
-    telefono_web: datos['Teléfono Web'] || '',
-    correo: datos.Correo || '',
-    whatsapp: datos.WhatsApp || '',
-    instagram: datos.Instagram || '',
-    facebook: datos.Facebook || '',
-    tiktok: datos.TikTok || '',
-    direccion: datos.Dirección || '',
-    web: datos.Web || '',
-    url_maps: datos.URLMaps || '',
-    busqueda: datos.Búsqueda || '',
-    metodo: datos.Método || '',
-    via: datos.Vía || '',
-    estado: datos.Estado || '',
-  });
-}
-
-function contarNegocios() {
-  const row = db.prepare('SELECT COUNT(*) as count FROM negocios').get();
-  return row.count;
-}
 // ─────────────────────────────────────────────────────────────────
 
 // Dominios de herramientas de desarrollo / tracking que no son correos reales
@@ -93,11 +23,11 @@ const EXTENSIONES_NO_CORREO =
 
 // Regex de emojis para limpiar texto antes de guardar en Excel
 const REGEX_EMOJI =
-  /[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27FF}]|[\u{2B00}-\u{2BFF}]|[\u{FE00}-\u{FEFF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA00}-\u{1FA9F}]|[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]/gu;
+  /[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27FF}]|[\u{2B00}-\u{2BFF}]|[\u{FE00}-\u{FEFF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA00}-\u{1FA9F}]/gu;
 
 // Regex para teléfonos peruanos y correos
 const REGEX = {
-  telefono: /(\+?51[\s\-]?)?(9\d{8}|\d{7,8})\b/g,
+  telefono: /(\+?51[\s\-]?)?9\d{8}\b/g,
   correo: /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g,
 };
 
@@ -107,7 +37,7 @@ function generarTerminosDeBusqueda() {
   const terminos = [];
   for (const categoria of CONFIG.CATEGORIAS) {
     for (const distrito of CONFIG.DISTRITOS) {
-      terminos.push({ termino: `${categoria} ${distrito}`, categoria });
+      terminos.push(`${categoria} ${distrito}`);
     }
   }
   return terminos;
@@ -170,7 +100,7 @@ function extraerNumeroDeWhatsApp(href) {
 }
 
 function esUrlWhatsApp(href) {
-  return /^https?:\/\/(wa\.me|(api\.|chat\.)?whatsapp\.com|wa\.link)\b|^\/\/(wa\.me|(api\.|chat\.)?whatsapp\.com|wa\.link)\b|^whatsapp:\/\//i.test(href);
+  return /wa\.me|whatsapp\.com|api\.whatsapp\.com|whatsapp:\/\/|wa\.link/i.test(href);
 }
 
 function buscarUrlContacto($, urlBase) {
@@ -300,12 +230,11 @@ function extraerRedesSociales($) {
 
     if (esUrlWhatsApp(href)) {
       try {
-        const parsed = new URL(href);
         if (/wa\.link/i.test(href)) {
           redes.WhatsApp.add(href.split("?")[0]);
           return;
         }
-        if (parsed.protocol === 'whatsapp:' && !parsed.searchParams.get('phone') && !parsed.pathname.match(/\/([\d]+)/)) return;
+        const parsed = new URL(href);
         const porPath = parsed.pathname.match(/\/([\d]+)/);
         const porParam = parsed.searchParams.get("phone");
         const numero = (porPath?.[1] || porParam || "").replace(/\D/g, "");
@@ -321,7 +250,7 @@ function extraerRedesSociales($) {
     } else if (/instagram\.com\//i.test(href)) {
       const m = href.match(/instagram\.com\/([a-zA-Z0-9._]{2,40})/i);
       if (m) redes.Instagram.add(`instagram.com/${m[1]}`);
-        } else if (/facebook\.com\//i.test(href) && !/sharer|login|recover|\/photo(?:\/|\.php)|profile\.php|\/dialog\/|l\.php|\/followers?\/|\/following\/|\/messages(?:\/|$)|\/events(?:\/|$)|\/about/i.test(href) && !/facebook\.com\/facebook(?:\/|$)/i.test(href)) {
+    } else if (/facebook\.com\//i.test(href) && !/sharer/i.test(href)) {
       const m = href.match(/facebook\.com\/([^\s"'<>?#]+)/i);
       if (m) redes.Facebook.add(`facebook.com/${m[1]}`);
     } else if (/tiktok\.com\/@/i.test(href)) {
@@ -379,7 +308,7 @@ async function visitarWebConPuppeteer(url, browser) {
   let html = "";
   try {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
-    await esperarAleatorio(800, 1500);
+    await esperarMs(1000);
   } catch (e) {
     console.warn(`     Timeout o error cargando ${url}, procesando lo que haya...`);
   } finally {
@@ -417,127 +346,28 @@ async function visitarWebConFetch(url) {
 
 async function visitarUrl(url, browser) {
   try {
-    const html = await visitarWebConFetch(url);
-    return { html, via: "fetch" };
-  } catch (errFetch) {
-    console.warn(`   Fetch falló (${errFetch.message}), usando Puppeteer...`);
-  }
-
-  try {
     const html = await visitarWebConPuppeteer(url, browser);
     return { html, via: "puppeteer" };
   } catch (errPuppeteer) {
-    throw new Error(`puppeteer: ${errPuppeteer.message}`);
-  }
-}
-
-// ─── POOL DE PÁGINAS ─────────────────────────────────────────────
-
-async function crearPoolPaginas(browser, n) {
-  const paginas = [];
-  for (let i = 0; i < n; i++) {
-    const p = await browser.newPage();
-    await p.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
-    );
-    await p.setRequestInterception(true);
-    p.on("request", (req) => {
-      ["image", "stylesheet", "font", "media"].includes(req.resourceType())
-        ? req.abort()
-        : req.continue();
-    });
-    paginas.push(p);
-  }
-  return paginas;
-}
-
-function crearGestorPool(paginas) {
-  const libres = [...paginas];
-  const esperando = [];
-
-  function obtener() {
-    if (libres.length > 0) return Promise.resolve(libres.pop());
-    return new Promise((resolve) => esperando.push(resolve));
+    console.warn(`   Puppeteer falló (${errPuppeteer.message}), intentando fetch...`);
   }
 
-  function liberar(pagina) {
-    const siguiente = esperando.shift();
-    if (siguiente) siguiente(pagina);
-    else libres.push(pagina);
+  try {
+    const html = await visitarWebConFetch(url);
+    return { html, via: "fetch" };
+  } catch (errFetch) {
+    throw new Error(`fetch: ${errFetch.message}`);
   }
-
-  return { obtener, liberar };
-}
-
-async function extraerFichaNegocio(pagina, enlace) {
-  await pagina.goto(enlace, { waitUntil: "domcontentloaded", timeout: 15000 });
-  await pagina.waitForSelector("h1", { timeout: 6000 }).catch(() => {});
-
-  const datos = await pagina.evaluate(() => {
-    const txt = (sel) => document.querySelector(sel)?.textContent?.trim() || "";
-
-    const nombre = txt("h1");
-
-    let telefono = "";
-    document.querySelectorAll('button[data-item-id^="phone"]').forEach((btn) => {
-      telefono =
-        btn.getAttribute("aria-label")?.replace(/^Teléfono:\s*/i, "") || "";
-    });
-    if (!telefono) {
-      document.querySelectorAll("button[aria-label]").forEach((btn) => {
-        const label = btn.getAttribute("aria-label") || "";
-        if (/^\+?[\d\s\-().]{7,}$/.test(label.trim())) telefono = label.trim();
-      });
-    }
-
-    let direccion = "";
-    document.querySelectorAll('button[data-item-id="address"]').forEach((btn) => {
-      direccion =
-        btn.getAttribute("aria-label")?.replace(/^Dirección:\s*/i, "") || "";
-    });
-
-    let web = "";
-    document.querySelectorAll('a[data-item-id="authority"]').forEach((a) => {
-      web = a.href || "";
-    });
-    if (!web) {
-      document.querySelectorAll("a[aria-label]").forEach((a) => {
-        if (/sitio web/i.test(a.getAttribute("aria-label") || "")) web = a.href;
-      });
-    }
-
-    const categoria =
-      txt('button[jsaction*="category"]') ||
-      document.querySelector(".DkEaL")?.textContent?.trim() ||
-      "";
-
-    const valoracion =
-      txt(".F7nice span") || txt('[aria-label*="estrellas"]') || "";
-
-    return { nombre, telefono, direccion, web, categoria, valoracion };
-  });
-
-  if (datos.nombre) return { ...datos, urlMaps: enlace };
-  return null;
 }
 
 // ─── GOOGLE MAPS: SCRAPING PRINCIPAL ─────────────────────────────
-
-async function detectarBloqueo(page) {
-  const bloqueado = await page.evaluate(() =>
-    document.body.innerText.includes("unusual traffic") ||
-    document.body.innerText.includes("tráfico inusual") ||
-    document.body.innerText.includes("tráfico anormal") ||
-    !!document.querySelector('form[action*="sorry"]')
-  );
-  return bloqueado;
-}
 
 async function buscarEnMaps(termino, browser) {
   const page = await browser.newPage();
   await page.setUserAgent(
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
   );
+
   await page.setRequestInterception(true);
   page.on("request", (req) => {
     ["image", "stylesheet", "font", "media"].includes(req.resourceType())
@@ -545,22 +375,15 @@ async function buscarEnMaps(termino, browser) {
       : req.continue();
   });
 
+  const negocios = [];
+
   try {
     const url = `https://www.google.com/maps/search/${encodeURIComponent(termino)}`;
     console.log(`   Abriendo Maps: ${url}`);
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-
-    if (await detectarBloqueo(page)) {
-      console.warn(`   Google bloqueó la búsqueda (tráfico inusual). Esperando 60s...`);
-      await esperarMs(60000);
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-      if (await detectarBloqueo(page)) {
-        throw new Error("Google bloqueó la búsqueda después de reintentar");
-      }
-    }
-
     await page.waitForSelector('[role="feed"]', { timeout: 15000 });
 
+    // Scroll robusto: se detiene cuando la cantidad de enlaces deja de crecer
     let prevCount = 0;
     let sameCount = 0;
     const maxIteraciones = 20;
@@ -570,8 +393,12 @@ async function buscarEnMaps(termino, browser) {
         [...new Set(els.map((a) => a.href).filter((h) => h.includes("/maps/place/")))]
       );
 
-      if (enlacesActuales.length === prevCount) sameCount++;
-      else sameCount = 0;
+      if (enlacesActuales.length === prevCount) {
+        sameCount++;
+      } else {
+        sameCount = 0;
+      }
+
       prevCount = enlacesActuales.length;
 
       if (enlacesActuales.length >= CONFIG.maxResultadosPorBusqueda) break;
@@ -581,6 +408,7 @@ async function buscarEnMaps(termino, browser) {
         const panel = document.querySelector('[role="feed"]');
         if (panel) panel.scrollBy(0, 2000);
       });
+
       await esperarAleatorio(1000, 1800);
     }
 
@@ -589,66 +417,82 @@ async function buscarEnMaps(termino, browser) {
     );
 
     console.log(`   Encontrados ${enlaces.length} negocios en "${termino}"`);
-    return enlaces;
+    const limite = Math.min(enlaces.length, CONFIG.maxResultadosPorBusqueda);
+
+    for (let i = 0; i < limite; i++) {
+      const enlaceNegocio = enlaces[i];
+      console.log(`   [${i + 1}/${limite}] Extrayendo ficha...`);
+
+      try {
+        await page.goto(enlaceNegocio, { waitUntil: "domcontentloaded", timeout: 20000 });
+        await page.waitForSelector("h1", { timeout: 8000 }).catch(() => {});
+
+        const datos = await page.evaluate(() => {
+          const txt = (sel) => document.querySelector(sel)?.textContent?.trim() || "";
+
+          const nombre = txt("h1");
+
+          let telefono = "";
+          document.querySelectorAll('button[data-item-id^="phone"]').forEach((btn) => {
+            telefono =
+              btn.getAttribute("aria-label")?.replace(/^Teléfono:\s*/i, "") || "";
+          });
+          if (!telefono) {
+            document.querySelectorAll("button[aria-label]").forEach((btn) => {
+              const label = btn.getAttribute("aria-label") || "";
+              if (/^\+?[\d\s\-().]{7,}$/.test(label.trim())) telefono = label.trim();
+            });
+          }
+
+          let direccion = "";
+          document.querySelectorAll('button[data-item-id="address"]').forEach((btn) => {
+            direccion =
+              btn.getAttribute("aria-label")?.replace(/^Dirección:\s*/i, "") || "";
+          });
+
+          let web = "";
+          document.querySelectorAll('a[data-item-id="authority"]').forEach((a) => {
+            web = a.href || "";
+          });
+          if (!web) {
+            document.querySelectorAll("a[aria-label]").forEach((a) => {
+              if (/sitio web/i.test(a.getAttribute("aria-label") || "")) web = a.href;
+            });
+          }
+
+          const categoria =
+            txt('button[jsaction*="category"]') ||
+            document.querySelector(".DkEaL")?.textContent?.trim() ||
+            "";
+
+          const valoracion =
+            txt(".F7nice span") || txt('[aria-label*="estrellas"]') || "";
+
+          return { nombre, telefono, direccion, web, categoria, valoracion };
+        });
+
+        if (datos.nombre) {
+          negocios.push({ ...datos, urlMaps: enlaceNegocio });
+        }
+      } catch (err) {
+        console.warn(`   Error en ficha: ${err.message}`);
+      }
+
+      await esperarAleatorio(
+        CONFIG.esperaMsEntreNegocios,
+        CONFIG.esperaMsEntreNegocios + 1000
+      );
+    }
   } finally {
     await page.close();
   }
-}
 
-// ─── PROCESAR FICHAS EN PARALELO ────────────────────────────────
-
-class BlockError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = 'BlockError';
-  }
-}
-
-async function procesarFichasEnParalelo(enlaces, gestor, concurrenciaFichas) {
-  const limite = Math.min(enlaces.length, CONFIG.maxResultadosPorBusqueda);
-  if (limite === 0) return [];
-
-  const limitFichas = pLimit(concurrenciaFichas);
-  let totalAttempted = 0;
-  let nullCount = 0;
-
-  console.log(`   Extrayendo ${limite} fichas (${concurrenciaFichas} en paralelo)...`);
-
-  const resultados = await Promise.all(
-    enlaces.slice(0, limite).map((enlace) =>
-      limitFichas(async () => {
-        const pagina = await gestor.obtener();
-        totalAttempted++;
-        try {
-          const datos = await extraerFichaNegocio(pagina, enlace);
-          await esperarAleatorio(300, 700);
-          if (!datos) nullCount++;
-          return datos;
-        } catch (err) {
-          console.warn(`   Error en ficha: ${err.message}`);
-          nullCount++;
-          return null;
-        } finally {
-          gestor.liberar(pagina);
-        }
-      })
-    )
-  );
-
-  const validos = resultados.filter(Boolean);
-  const nullRatio = totalAttempted > 0 ? nullCount / totalAttempted : 0;
-
-  if (nullRatio > 0.6) {
-    console.warn(`   Alta tasa de fichas vacías (${(nullRatio * 100).toFixed(0)}%). Posible bloqueo de Google.`);
-    throw new BlockError(`Posible bloqueo: ${(nullRatio * 100).toFixed(0)}% de fichas vacías`);
-  }
-
-  return validos;
+  return negocios;
 }
 
 // ─── PROCESAR UN NEGOCIO ──────────────────────────────────────────
 
-async function procesarNegocio(negocio, browser, terminoBusqueda, categoriaUsuario) {
+async function procesarNegocio(negocio, browser, terminoBusqueda) {
   let datos = {
     telefonoWeb: "",
     correo: "",
@@ -660,27 +504,7 @@ async function procesarNegocio(negocio, browser, terminoBusqueda, categoriaUsuar
   let metodo = "maps";
   let via = "—";
 
-  // Extraer redes desde la URL de Maps si la web es una red social
-  if (negocio.web) {
-    const web = negocio.web;
-    if (/facebook\.com\//i.test(web)) {
-      const m = web.match(/facebook\.com\/([^\s"'<>?#]+)/i);
-      if (m) datos.facebook = `facebook.com/${m[1]}`;
-    } else if (/instagram\.com\//i.test(web)) {
-      const m = web.match(/instagram\.com\/([a-zA-Z0-9._]{2,40})/i);
-      if (m) datos.instagram = `instagram.com/${m[1]}`;
-    } else if (/tiktok\.com\/@/i.test(web)) {
-      const m = web.match(/tiktok\.com\/@([^\s"'<>?/]+)/i);
-      if (m) datos.tiktok = `tiktok.com/@${m[1]}`;
-    } else if (esUrlWhatsApp(web)) {
-      datos.whatsapp = web;
-    }
-  }
-
-  // Saltar webs que son redes sociales (no se pueden scrapear)
-  const esRedSocial = /facebook\.com|instagram\.com|tiktok\.com|wa\.me|wa\.link/i.test(negocio.web);
-
-  if (CONFIG.visitarWebDelNegocio && negocio.web && !esRedSocial) {
+  if (CONFIG.visitarWebDelNegocio && negocio.web) {
     try {
       const resultadoPrincipal = await visitarUrl(negocio.web, browser);
       const datosPrincipal = extraerDatosDeHtml(resultadoPrincipal.html);
@@ -712,7 +536,7 @@ async function procesarNegocio(negocio, browser, terminoBusqueda, categoriaUsuar
 
   return {
     Nombre: limpiarTexto(negocio.nombre) || "—",
-    Categoría: categoriaUsuario || limpiarTexto(negocio.categoria) || "—",
+    Categoría: limpiarTexto(negocio.categoria) || "—",
     Valoración: negocio.valoracion || "—",
     "Teléfono Maps": telefonoMaps || "—",
     "Teléfono Web": datos.telefonoWeb || "—",
@@ -729,35 +553,6 @@ async function procesarNegocio(negocio, browser, terminoBusqueda, categoriaUsuar
     Vía: via,
     Estado: "OK",
   };
-}
-
-// ─── WRAPPER SEGURO PARA CONCURRENCIA ─────────────────────────────
-
-async function procesarNegocioConError(negocio, browser, termino, categoria) {
-  try {
-    return await procesarNegocio(negocio, browser, termino, categoria);
-  } catch (err) {
-    console.error(`   Error inesperado: ${err.message}`);
-    return {
-      Nombre: negocio.nombre || "ERROR",
-      Categoría: negocio.categoria || "",
-      Valoración: "",
-      "Teléfono Maps": negocio.telefono ? limpiarTelefonos(negocio.telefono) || negocio.telefono : "",
-      "Teléfono Web": "",
-      Correo: "",
-      WhatsApp: "",
-      Instagram: "",
-      Facebook: "",
-      TikTok: "",
-      Dirección: negocio.direccion || "",
-      Web: negocio.web || "",
-      URLMaps: negocio.urlMaps || "",
-      Búsqueda: termino,
-      Método: "maps",
-      Vía: "—",
-      Estado: err.message.slice(0, 100),
-    };
-  }
 }
 
 // ─── GUARDAR EXCEL ────────────────────────────────────────────────
@@ -781,6 +576,8 @@ async function guardarExcel(datos, ruta) {
     { header: "Web", key: "Web", width: 40 },
     { header: "URL Maps", key: "URLMaps", width: 45 },
     { header: "Búsqueda", key: "Búsqueda", width: 35 },
+    { header: "Método", key: "Método", width: 12 },
+    { header: "Vía", key: "Vía", width: 12 },
     { header: "Estado", key: "Estado", width: 14 },
   ];
 
@@ -807,23 +604,19 @@ async function guardarExcel(datos, ruta) {
     if (r.Estado !== "OK") {
       row.getCell("Estado").font = { color: { argb: "FFCC0000" }, bold: true };
     }
+    if (r.Vía === "puppeteer") {
+      row.getCell("Vía").font = { color: { argb: "FF1A7F37" }, bold: true };
+    } else if (r.Vía === "fetch") {
+      row.getCell("Vía").font = { color: { argb: "FFB45309" }, bold: true };
+    }
 
     row.alignment = { vertical: "middle" };
   });
 
-  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 15 } };
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 17 } };
   ws.views = [{ state: "frozen", ySplit: 1 }];
 
   await wb.xlsx.writeFile(ruta);
-}
-
-// ─── REANUDACIÓN ─────────────────────────────────────────────────
-
-function terminoYaProcesado(termino) {
-  const row = db.prepare(
-    `SELECT COUNT(*) as count FROM negocios WHERE busqueda = ? AND nombre != 'ERROR-BUSQUEDA'`
-  ).get(termino);
-  return row.count > 0;
 }
 
 // ─── MAIN ─────────────────────────────────────────────────────────
@@ -831,16 +624,15 @@ function terminoYaProcesado(termino) {
 async function main() {
   const terminos = generarTerminosDeBusqueda();
   const totalCombinaciones = CONFIG.CATEGORIAS.length * CONFIG.DISTRITOS.length;
-  const concurrencia = CONFIG.concurrencia || 5;
-  const concurrenciaFichas = CONFIG.concurrenciaFichas || 4;
 
-  console.log(`\n Maps Extractor v2`);
+  console.log(`\n Maps Extractor iniciado`);
   console.log(`   Categorias    : ${CONFIG.CATEGORIAS.length}`);
   console.log(`   Distritos     : ${CONFIG.DISTRITOS.length}`);
   console.log(`   Combinaciones : ${totalCombinaciones}`);
   console.log(`   Max. negocios por busqueda : ${CONFIG.maxResultadosPorBusqueda}`);
-  console.log(`   Concurrencia fichas: ${concurrenciaFichas}`);
-  console.log(`   Concurrencia webs: ${concurrencia}`);
+  console.log(
+    `   Max. negocios estimados    : ~${totalCombinaciones * CONFIG.maxResultadosPorBusqueda}`
+  );
   console.log(`${"─".repeat(50)}\n`);
 
   const browser = await puppeteer.launch({
@@ -848,75 +640,82 @@ async function main() {
     args: ["--no-sandbox", "--disable-setuid-sandbox", "--lang=es-PE"],
   });
 
-  const pool = await crearPoolPaginas(browser, concurrenciaFichas);
-  const gestor = crearGestorPool(pool);
-  const limit = pLimit(concurrencia);
+  const resultados = [];
+
+  const filaErrorBase = {
+    Nombre: "",
+    Categoría: "",
+    Valoración: "",
+    "Teléfono Maps": "",
+    "Teléfono Web": "",
+    Correo: "",
+    WhatsApp: "",
+    Instagram: "",
+    Facebook: "",
+    TikTok: "",
+    Dirección: "",
+    Web: "",
+    URLMaps: "",
+    Búsqueda: "",
+    Método: "—",
+    Vía: "—",
+    Estado: "",
+  };
 
   try {
     for (let i = 0; i < terminos.length; i++) {
-      const { termino, categoria: catUsuario } = terminos[i];
+      const termino = terminos[i];
       console.log(`\n[Busqueda ${i + 1}/${terminos.length}] "${termino}"`);
 
-      // Reanudación: saltar si ya fue procesado
-      if (terminoYaProcesado(termino)) {
-        console.log(`   Ya procesado anteriormente, saltando...`);
-        continue;
-      }
-
-      let enlaces = [];
+      let negocios = [];
       try {
-        enlaces = await buscarEnMaps(termino, browser);
+        negocios = await buscarEnMaps(termino, browser);
       } catch (err) {
         console.error(` Error al buscar en Maps: ${err.message}`);
-        guardarNegocio({
+        resultados.push({
+          ...filaErrorBase,
           Nombre: "ERROR-BUSQUEDA",
-          Categoría: catUsuario,
+          Categoría: termino,
           Búsqueda: termino,
           Estado: err.message.slice(0, 100),
         });
         continue;
       }
 
-      let negocios = [];
-      let fichasOk = false;
-      for (let intento = 0; intento < 3; intento++) {
+      console.log(`   Procesando ${negocios.length} negocios...`);
+
+      for (let j = 0; j < negocios.length; j++) {
+        const negocio = negocios[j];
+        console.log(`   [${j + 1}/${negocios.length}] ${negocio.nombre}`);
+
         try {
-          negocios = await procesarFichasEnParalelo(enlaces, gestor, concurrenciaFichas);
-          fichasOk = true;
-          break;
+          const datos = await procesarNegocio(negocio, browser, termino);
+          resultados.push(datos);
+          console.log(
+            `     Maps: ${datos["Teléfono Maps"] || "—"}  Web: ${
+              datos["Teléfono Web"] || "—"
+            }  IG: ${datos.Instagram || "—"}  Via: ${datos.Vía}`
+          );
         } catch (err) {
-          if (err.name !== 'BlockError') throw err;
-          if (intento < 2) {
-            console.warn(`   Reintentando tras posible bloqueo (intento ${intento + 1}/3) en 60s...`);
-            await esperarMs(60000);
-          }
+          console.error(`   Error: ${err.message}`);
+          resultados.push({
+            ...filaErrorBase,
+            Nombre: negocio.nombre || "ERROR",
+            Categoría: negocio.categoria || "",
+            "Teléfono Maps": negocio.telefono || "",
+            Dirección: negocio.direccion || "",
+            Web: negocio.web || "",
+            URLMaps: negocio.urlMaps || "",
+            Búsqueda: termino,
+            Método: "maps",
+            Estado: err.message.slice(0, 100),
+          });
         }
       }
-      if (!fichasOk) {
-        console.error(`   Bloqueo persistente en fichas. Saltando término.`);
-        guardarNegocio({
-          Nombre: "ERROR-BUSQUEDA",
-          Categoría: catUsuario,
-          Búsqueda: termino,
-          Estado: "Bloqueo persistente en extracción de fichas",
-        });
-        continue;
-      }
 
-      console.log(`   Extraidas ${negocios.length} fichas. Enriquiciendo (concurrencia: ${concurrencia})...`);
-
-      const promises = negocios.map((negocio) =>
-        limit(() => procesarNegocioConError(negocio, browser, termino, catUsuario))
-      );
-
-      const resultados = await Promise.all(promises);
-
-      for (const datos of resultados) {
-        guardarNegocio(datos);
-      }
-
-      const total = contarNegocios();
-      console.log(`   Almacenados: ${resultados.length} registros  Total en BD: ${total}`);
+      const tempRuta = CONFIG.archivoExcel.replace(".xlsx", "_temp.xlsx");
+      await guardarExcel(resultados, tempRuta);
+      console.log(`\n Guardado parcial: ${resultados.length} registros → ${tempRuta}`);
 
       if (i < terminos.length - 1) {
         await esperarAleatorio(
@@ -926,53 +725,26 @@ async function main() {
       }
     }
   } finally {
-    for (const p of pool) await p.close().catch(() => {});
     await browser.close();
   }
 
-  // ─── EXPORTAR A EXCEL DESDE SQLITE ─────────────────────────────
+  await guardarExcel(resultados, CONFIG.archivoExcel);
 
-  const todos = db.prepare(
-    `SELECT nombre, categoria, valoracion, telefono_maps, telefono_web,
-            correo, whatsapp, instagram, facebook, tiktok,
-            direccion, web, url_maps, busqueda, estado
-     FROM negocios ORDER BY id`
-  ).all();
-
-  const exportData = todos.map((r) => ({
-    Nombre: r.nombre || "—",
-    Categoría: r.categoria || "—",
-    Valoración: r.valoracion || "—",
-    "Teléfono Maps": r.telefono_maps || "—",
-    "Teléfono Web": r.telefono_web || "—",
-    Correo: r.correo || "—",
-    WhatsApp: r.whatsapp || "—",
-    Instagram: r.instagram || "—",
-    Facebook: r.facebook || "—",
-    TikTok: r.tiktok || "—",
-    Dirección: r.direccion || "—",
-    Web: r.web || "—",
-    URLMaps: r.url_maps || "—",
-    Búsqueda: r.busqueda || "—",
-    Estado: r.estado || "—",
-  }));
-
-  await guardarExcel(exportData, CONFIG.archivoExcel);
-
-  const ok = todos.filter((r) => r.estado === "OK").length;
-  const err = todos.filter((r) => r.estado !== "OK").length;
+  const ok = resultados.filter((r) => r.Estado === "OK").length;
+  const err = resultados.filter((r) => r.Estado !== "OK").length;
+  const viaPuppeteer = resultados.filter((r) => r.Vía === "puppeteer").length;
+  const viaFetch = resultados.filter((r) => r.Vía === "fetch").length;
 
   console.log(`\n${"═".repeat(50)}`);
   console.log(` Proceso completo`);
   console.log(`   Busquedas     : ${terminos.length}`);
-  console.log(`   Negocios      : ${todos.length}`);
+  console.log(`   Negocios      : ${resultados.length}`);
   console.log(`   Exitosos      : ${ok}`);
   console.log(`   Con error     : ${err}`);
+  console.log(`   Via puppeteer : ${viaPuppeteer}`);
+  console.log(`   Via fetch     : ${viaFetch}`);
   console.log(`   Archivo       : ${CONFIG.archivoExcel}`);
-  console.log(`   BD SQLite     : ${DB_PATH}`);
   console.log(`${"═".repeat(50)}\n`);
-
-  db.close();
 }
 
 main().catch(console.error);

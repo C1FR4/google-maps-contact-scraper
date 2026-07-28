@@ -1,11 +1,10 @@
 {
   "archivoExcel": "contactos.xlsx",
-  "maxResultadosPorBusqueda": 50,
+  "maxResultadosPorBusqueda": 20,
   "visitarWebDelNegocio": true,
   "esperaMsEntreBusquedas": 3000,
+  "esperaMsEntreNegocios": 1500,
   "umbralTextoUtil": 400,
-  "concurrencia": 5,
-  "concurrenciaFichas": 4,
 
   "palabrasContacto": [
     "contacto",
@@ -21,19 +20,10 @@
 
   "CATEGORIAS": [
   "Cafetería",
-  "Restaurante peruano",
   "Tienda de ropa"
 ],
   "DISTRITOS": [
-  "Miraflores Lima",
-  "Barranco Lima",
-  "San Isidro Lima",
-  "Lince Lima",
-  "Jesús María Lima",
-  "Magdalena del Mar Lima",
-  "Pueblo Libre Lima",
-  "San Miguel Lima",
-  "Surquillo Lima",
-  "Santiago de Surco Lima"
+  "Yanahuara Arequipa",
+  "Lince Lima"
 ]
 }

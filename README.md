@@ -4,8 +4,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Status](https://img.shields.io/badge/status-activo-brightgreen)
 
-Herramienta para recolectar datos de contacto de negocios desde Google Maps a escala nacional. Diseñada para proyectos de logística que requieren identificar proveedores y colaboradores en múltiples categorías y distritos.
-
+Herramienta de automatización para recolectar datos de contacto de negocios desde Google Maps. Desarrollada para un proyecto de logística para identificar potenciales proveedores y colaboradores.
 ---
 
 ## ¿Qué extrae?
@@ -13,10 +12,10 @@ Herramienta para recolectar datos de contacto de negocios desde Google Maps a es
 | Campo | Fuente |
 |---|---|
 | Nombre del negocio | Google Maps |
-| Categoría | Configurada por el usuario (exacta) |
-| Valoración | Google Maps |
+| Categoría | Google Maps |
+| Valoración (rating) | Google Maps |
 | Dirección | Google Maps |
-| Teléfono | Google Maps + Web del negocio |
+| Teléfono | Google Maps + Web |
 | Correo electrónico | Web del negocio |
 | WhatsApp | Web del negocio |
 | Instagram | Web del negocio |
@@ -31,17 +30,13 @@ Herramienta para recolectar datos de contacto de negocios desde Google Maps a es
 ```
 config.json (categorías × distritos)
         ↓
-Google Maps → scroll infinito → lista de enlaces
+Google Maps → lista de negocios
         ↓
-Pool persistente (4 páginas paralelas) → extrae fichas
-        ↓
-Fetch-first / Puppeteer fallback → web de cada negocio
-        ↓
+Visita web de cada negocio (Puppeteer / Fetch)
+        ↓  
 Detecta subpágina de contacto y la visita también
         ↓
-Almacena en SQLite (contactos.db) → exporta a contactos.xlsx
-        ↓
-Reanudación automática: si se interrumpe, retoma donde quedó
+contactos.xlsx  
 ```
 
 ---
@@ -67,39 +62,21 @@ npm start
 ---
 
 ## Configuración (`config.json`)
-
+**Importante:** Antes de ejecutar el script, asegúrate de modificar el archivo de configuración con los distritos y categorías que necesites. Los valores actuales son solo de prueba.
 ```json
 {
   "archivoExcel": "contactos.xlsx",
-  "maxResultadosPorBusqueda": 50,
+  "maxResultadosPorBusqueda": 20,
   "visitarWebDelNegocio": true,
-  "esperaMsEntreBusquedas": 3000,
-  "umbralTextoUtil": 400,
-  "concurrencia": 5,
-  "concurrenciaFichas": 4,
-
-  "palabrasContacto": [
-    "contacto", "contactenos", "contact", "contactus",
-    "ubicacion", "ubicaciones", "locales", "tiendas", "sucursales"
-  ],
 
   "CATEGORIAS": [
     "Cafetería",
-    "Restaurante peruano",
-    "Tienda de ropa"
+    "Restaurante peruano"
   ],
 
   "DISTRITOS": [
     "Miraflores Lima",
-    "Barranco Lima",
-    "San Isidro Lima",
-    "Lince Lima",
-    "Jesús María Lima",
-    "Magdalena del Mar Lima",
-    "Pueblo Libre Lima",
-    "San Miguel Lima",
-    "Surquillo Lima",
-    "Santiago de Surco Lima"
+    "Barranco Lima"
   ]
 }
 ```
@@ -107,76 +84,30 @@ npm start
 | Parámetro | Descripción | Default |
 |---|---|---|
 | `archivoExcel` | Nombre del archivo de salida | `contactos.xlsx` |
-| `maxResultadosPorBusqueda` | Negocios máximos por término de búsqueda | `50` |
+| `maxResultadosPorBusqueda` | Negocios máximos por búsqueda | `20` |
 | `visitarWebDelNegocio` | Enriquecer con datos de la web | `true` |
 | `esperaMsEntreBusquedas` | Pausa entre búsquedas (ms) | `3000` |
-| `umbralTextoUtil` | Mínimo de texto para considerar página válida | `400` |
-| `concurrencia` | Cuántas webs visita en paralelo | `5` |
-| `concurrenciaFichas` | Cuántas fichas de Maps extrae en paralelo | `4` |
-| `palabrasContacto` | Palabras clave para detectar subpáginas de contacto | — |
-| `CATEGORIAS` | Tipos de negocio a buscar | — |
-| `DISTRITOS` | Distritos / zonas donde buscar | — |
+| `CATEGORIAS` | Lista de tipos de negocio a buscar | ver archivo |
+| `DISTRITOS` | Lista de distritos / ciudades | ver archivo |
 
 ---
 
 ## Output
 
-Genera `contactos.xlsx` con:
-
-- 15 columnas limpias (sin columnas técnicas)
-- Encabezado azul oscuro con texto blanco, fila congelada
-- Filas con colores alternos (blanco / azul claro)
-- Filtros automáticos en todas las columnas
-- Categoría exacta como la configuró el usuario
-- Teléfonos normalizados (sin prefijo +51)
-- Enlaces directos funcionales (WhatsApp, redes sociales)
-
----
-
-## Características técnicas
-
-- **Fetch-first**: intenta obtener la web con `fetch` (rápido); si la página requiere JS, cae automáticamente a Puppeteer.
-- **Extracción paralela de fichas**: pool de 4 páginas de Puppeteer extrayendo fichas de Maps simultáneamente.
-- **Pool persistente**: las páginas se crean una vez y se reúsan entre términos de búsqueda.
-- **Reanudación automática**: si el proceso se interrumpe, al retomar salta los términos ya procesados (basado en SQLite).
-- **Detección de bloqueo**: si Google detecta tráfico automatizado, espera 60s y reintenta una vez antes de fallar controladamente.
-- **Filtro de redes sociales**: descarta enlaces falsos de Facebook (login, share, recover, photo, l.php, messages, events, etc.) y WhatsApp sin número.
-- **Extracción desde URL social**: si un negocio tiene Instagram/Facebook como su "sitio web" en Maps, el handle se extrae directamente.
-
----
-
-## Tiempo estimado
-
-Para 30 términos (ej: 3 categorías × 10 distritos):
-
-| Fase | Por término |
-|---|---|
-| Maps scroll + enlaces | ~15s |
-| Fichas en paralelo | ~20s |
-| Enriquecimiento web | ~60–90s |
-| **Total estimado** | **30–45 minutos** |
-
-~200–500 negocios en el Excel final.
+Genera `contactos.xlsx` con encabezados formateados, filas con colores alternos, filtros automáticos y primera fila fija. También guarda un archivo `_temp.xlsx` progresivo para no perder datos si se interrumpe la ejecución.
 
 ---
 
 ## Notas
 
-- Usa **fetch** como primera opción (rápido) y **Puppeteer** como fallback automático para páginas renderizadas con JS.
+- Usa **Puppeteer** como primera opción para visitar webs y **fetch** como fallback automático.
 - Detecta y visita subpáginas de contacto dentro del mismo dominio.
-- Normaliza teléfonos peruanos (elimina prefijo +51, 51, 0).
-- Filtra correos falsos de dominios de tracking (Sentry, Hotjar, Klaviyo, etc.) y extensiones de archivo.
+- Normaliza teléfonos peruanos (elimina prefijo `+51`, `51`).
+- Filtra correos falsos provenientes de dominios de tracking o herramientas (Sentry, Hotjar, etc.).
 - Agrega pausas aleatorias para simular comportamiento humano.
-- No requiere API keys ni proxies pagados.
 
 ---
 
 ## Disclaimer
 
-Este proyecto se proporciona exclusivamente con **fines educativos y de investigación**. El scraping automatizado de Google Maps puede violar sus [Términos de Servicio](https://policies.google.com/terms). 
-
-El mantenedor de este repositorio **no se responsabiliza** por el uso que terceros hagan de esta herramienta. Úsala bajo tu propio criterio y responsabilidad.
-
----
-
-
+Este proyecto es para fines educativos y de investigación. Úsalo respetando los [Términos de Servicio de Google](https://policies.google.com/terms) y la normativa de privacidad aplicable en tu país.
